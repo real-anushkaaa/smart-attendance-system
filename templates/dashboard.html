@@ -1,0 +1,280 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="hero card">
+    <div>
+        <h1 data-i18n="dashboard_title">Attendance Dashboard</h1>
+        {% if session.get('role') == 'student' and student_profile %}
+        <p><strong>{{ student_profile['name'] }}</strong> ({{ student_profile['student_code'] }}) &bull; Section {{ student_profile['section_name'] }} {{ student_profile['section'] or '' }}</p>
+        {% endif %}
+        <div class="lang-switch">
+            <button onclick="setLanguage('en')">English</button>
+            <button onclick="setLanguage('kn')">Kannada</button>
+        </div>
+    </div>
+    <div class="today">{{ today }}</div>
+</div>
+
+{% if session.get('role') in ['admin', 'teacher'] %}
+<!-- Smart KPI Metric Cards for Admin & Teacher -->
+<div class="kpi-grid">
+    <div class="kpi-card card">
+        <div class="kpi-title" data-i18n="total_students">Total Active Students</div>
+        <div class="kpi-value">{{ totals['student_count'] }}</div>
+        <div class="kpi-sub">Registered across all sections</div>
+    </div>
+    <div class="kpi-card card">
+        <div class="kpi-title">Today's Attendance Rate</div>
+        <div class="kpi-value {% if totals['today_rate'] >= 75 %}text-success{% else %}text-warning{% endif %}">
+            {{ totals['today_rate'] }}%
+        </div>
+        <div class="kpi-sub">
+            {% if totals['today_rate'] >= 75 %}&#x2705; Healthy rate{% else %}&#x26A0;&#xFE0F; Below target{% endif %}
+        </div>
+    </div>
+    <div class="kpi-card card">
+        <div class="kpi-title">Today's Present / Absent</div>
+        <div class="kpi-value"><span class="text-success">{{ totals['today_present'] }}</span> / <span class="text-danger">{{ totals['today_absent'] }}</span></div>
+        <div class="kpi-sub">{{ totals['total_sessions_today'] }} total session marks</div>
+    </div>
+    <div class="kpi-card card">
+        <div class="kpi-title">Defaulters / At-Risk</div>
+        <div class="kpi-value {% if totals['defaulters_count'] > 0 %}text-danger{% else %}text-success{% endif %}">
+            {{ totals['defaulters_count'] }}
+        </div>
+        <div class="kpi-sub">Students with &lt; 75% overall</div>
+    </div>
+</div>
+
+<!-- Interactive Visual Charts -->
+<div class="charts-grid">
+    <div class="card chart-box">
+        <div class="row-between">
+            <h3 style="font-size: 0.95rem; color: #3b4e48;">&#x1F4C8; 7-Day Attendance Trend</h3>
+            <span class="badge badge-info">Last 7 Days</span>
+        </div>
+        <div style="position: relative; height: 210px; margin-top: 6px;">
+            <canvas id="trendChart"></canvas>
+        </div>
+    </div>
+    <div class="card chart-box">
+        <div class="row-between">
+            <h3 style="font-size: 0.95rem; color: #3b4e48;">&#x1F3AF; Today's Ratio</h3>
+            <span class="badge badge-info">{{ today }}</span>
+        </div>
+        <div style="position: relative; height: 210px; margin-top: 6px;">
+            <canvas id="todayRatioChart"></canvas>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if session.get('role') == 'student' and student_analytics %}
+<!-- Student Personal Attendance Analytics -->
+<div class="student-analytics-container card">
+    <div class="student-analytics-row">
+        <div class="progress-ring-container">
+            <svg class="progress-ring" width="160" height="160">
+                <circle class="progress-ring-bg" stroke="#e6ece9" stroke-width="14" fill="transparent" r="66" cx="80" cy="80" />
+                <circle id="studentRing" class="progress-ring-circle {% if student_analytics['is_defaulter'] %}ring-danger{% else %}ring-success{% endif %}"
+                        stroke="{% if student_analytics['is_defaulter'] %}#d9534f{% else %}#1d7f65{% endif %}"
+                        stroke-width="14" stroke-dasharray="414.69" stroke-dashoffset="414.69" stroke-linecap="round"
+                        fill="transparent" r="66" cx="80" cy="80" />
+            </svg>
+            <div class="progress-ring-text">
+                <span class="ring-percent">{{ student_analytics['overall_percent'] }}%</span>
+                <span class="ring-label">Overall</span>
+            </div>
+        </div>
+        <div class="student-kpi-details">
+            <h2>Your Attendance Overview</h2>
+            <div class="badge-row">
+                {% if student_analytics['is_defaulter'] %}
+                <span class="badge badge-danger">&#x26A0;&#xFE0F; Attendance Shortage (&lt; 75%)</span>
+                {% else %}
+                <span class="badge badge-success">&#x2705; Attendance Safe (&ge; 75%)</span>
+                {% endif %}
+            </div>
+            <div class="student-stats-grid">
+                <div class="s-stat"><span class="s-num">{{ student_analytics['total_classes'] }}</span><span class="s-label">Total Classes</span></div>
+                <div class="s-stat text-success"><span class="s-num">{{ student_analytics['present_classes'] }}</span><span class="s-label">Attended</span></div>
+                <div class="s-stat text-danger"><span class="s-num">{{ student_analytics['absent_classes'] }}</span><span class="s-label">Missed</span></div>
+            </div>
+        </div>
+    </div>
+
+    {% if student_analytics['subject_breakdown'] %}
+    <div class="subject-progress-section">
+        <h3>Subject-Wise Attendance Breakdown</h3>
+        <div class="subject-bars">
+            {% for sb in student_analytics['subject_breakdown'] %}
+            <div class="subject-bar-item">
+                <div class="row-between">
+                    <strong>{{ sb['subject'] }}</strong>
+                    <span>{{ sb['present'] }}/{{ sb['total'] }} ({{ sb['percent'] }}%)</span>
+                </div>
+                <div class="progress-bar-bg">
+                    <div class="progress-bar-fill {% if sb['is_defaulter'] %}fill-danger{% else %}fill-success{% endif %}"
+                         style="width: {{ sb['percent'] }}%;"></div>
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="quick-actions">
+    {% if session.get('role') in ['teacher', 'student'] %}
+    <a class="action card" href="{{ url_for('attendance.mark_page') }}" data-i18n="mark_attendance">&#x2705; Mark Attendance</a>
+    {% endif %}
+    <a class="action card" href="{{ url_for('reports.reports_home') }}" data-i18n="view_reports">&#x1F4CA; View Reports</a>
+    {% if session.get('role') == 'admin' %}
+    <a class="action card" href="{{ url_for('students.add_student') }}" data-i18n="add_students">&#x1F464; Add Students</a>
+    <a class="action card" href="{{ url_for('auth.users') }}">&#x1F511; Manage Users</a>
+    {% endif %}
+</div>
+
+<section class="card">
+    {% if session.get('role') in ['admin', 'teacher'] %}
+    <h2 data-i18n="section_overview">Section Overview</h2>
+    <table>
+        <tr><th>Section</th><th>Enrolled Students</th></tr>
+        {% for c in sections %}
+        <tr><td><strong>{{ c['section_name'] }}</strong></td><td>{{ c['total'] }}</td></tr>
+        {% endfor %}
+    </table>
+    {% else %}
+    {% if timetable_rows %}
+    <h2>Today's Timetable</h2>
+    <table>
+        <tr><th>Subject</th><th>Start Time</th><th>End Time</th></tr>
+        {% for t in timetable_rows %}
+        <tr><td><strong>{{ t['subject'] }}</strong></td><td>{{ t['start_time'] }}</td><td>{{ t['end_time'] }}</td></tr>
+        {% endfor %}
+    </table>
+    {% endif %}
+
+    <h2>My Recent Attendance History</h2>
+    <table>
+        <tr><th>Date</th><th>Subject</th><th>Status</th><th>Recorded At</th></tr>
+        {% for a in recent_attendance %}
+        <tr>
+            <td>{{ a['date'] }}</td>
+            <td>{{ a['subject'] }}</td>
+            <td>
+                {% if a['status'] == 'present' %}
+                <span class="badge badge-success">&#x2705; Present</span>
+                {% elif a['status'] == 'late' %}
+                <span class="badge badge-warning">&#x23F0; Late</span>
+                {% else %}
+                <span class="badge badge-danger">&#x274C; Absent</span>
+                {% endif %}
+            </td>
+            <td>{{ a['timestamp'] }}</td>
+        </tr>
+        {% endfor %}
+    </table>
+    {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+{% if session.get('role') in ['admin', 'teacher'] %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    // 1. 7-Day Trend Line Chart (Soft aesthetic colors)
+    const trendCtx = document.getElementById("trendChart");
+    if (trendCtx) {
+        const trendData = {{ trend_7d_data | tojson }};
+        new Chart(trendCtx, {
+            type: 'line',
+            data: {
+                labels: trendData.labels,
+                datasets: [
+                    {
+                        label: 'Present',
+                        data: trendData.present,
+                        borderColor: 'rgba(56, 161, 105, 0.95)',
+                        backgroundColor: 'rgba(56, 161, 105, 0.08)',
+                        fill: true,
+                        tension: 0.35,
+                        borderWidth: 2,
+                        pointRadius: 3,
+                        pointBackgroundColor: 'rgba(56, 161, 105, 0.95)'
+                    },
+                    {
+                        label: 'Absent',
+                        data: trendData.absent,
+                        borderColor: 'rgba(239, 106, 115, 0.9)',
+                        backgroundColor: 'rgba(239, 106, 115, 0.05)',
+                        fill: true,
+                        tension: 0.35,
+                        borderWidth: 1.8,
+                        pointRadius: 3,
+                        pointBackgroundColor: 'rgba(239, 106, 115, 0.9)'
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'top', labels: { boxWidth: 10, font: { size: 11 } } }
+                },
+                scales: {
+                    x: { grid: { display: false } },
+                    y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f0f3f2' } }
+                }
+            }
+        });
+    }
+
+    // 2. Today's Ratio Doughnut Chart (Soft pastel colors)
+    const ratioCtx = document.getElementById("todayRatioChart");
+    if (ratioCtx) {
+        const todayPres = {{ totals['today_present'] }};
+        const todayAbse = {{ totals['today_absent'] }};
+        const totalStuds = {{ totals['student_count'] }};
+        const notMarked = Math.max(0, totalStuds - todayPres - todayAbse);
+
+        new Chart(ratioCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Present Today', 'Absent Today', 'Not Marked Yet'],
+                datasets: [{
+                    data: [todayPres, todayAbse, notMarked],
+                    backgroundColor: ['rgba(56, 161, 105, 0.72)', 'rgba(239, 106, 115, 0.7)', '#e6eeeb'],
+                    borderWidth: 2,
+                    borderColor: '#fff',
+                    hoverOffset: 3
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } }
+                },
+                cutout: '72%'
+            }
+        });
+    }
+});
+</script>
+{% endif %}
+
+{% if session.get('role') == 'student' and student_analytics %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    const ring = document.getElementById("studentRing");
+    if (ring) {
+        const percent = {{ student_analytics['overall_percent'] }};
+        const circumference = 2 * Math.PI * 66; // approx 414.69
+        const offset = circumference - (percent / 100) * circumference;
+        ring.style.strokeDashoffset = offset;
+    }
+});
+</script>
+{% endif %}
+{% endblock %}
