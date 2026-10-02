@@ -1,0 +1,310 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+    <div class="row-between">
+        <div>
+            <h1 data-i18n="view_reports">&#x1F4CA; Attendance Analytics &amp; Reports</h1>
+            <p class="hint">Date Range: <strong>{{ start_date }}</strong> to <strong>{{ end_date }}</strong></p>
+        </div>
+        <div>
+            <a class="btn" href="{{ url_for('reports.export_csv', subject=subject, start_date=start_date, end_date=end_date, section=section_name) }}">&#x1F4E5; Export CSV</a>
+            <a class="btn" href="{{ url_for('reports.export_xlsx', subject=subject, start_date=start_date, end_date=end_date, section=section_name) }}">&#x1F4C8; Export Excel</a>
+            <a class="btn" href="{{ url_for('reports.export_pdf', subject=subject, start_date=start_date, end_date=end_date, section=section_name) }}">&#x1F4C4; Export PDF</a>
+            {% if session.get('role') == 'admin' %}
+            <form method="post" action="{{ url_for('reports.clear_attendance_data') }}" style="display:inline;" onsubmit="return confirm('Clear all attendance and attendance sync history? This cannot be undone.');">
+                <button class="btn danger" type="submit">&#x1F5D1;&#xFE0F; Clear Attendance</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Filter Form -->
+    <form class="inline-form filter-form" method="get" style="margin-top: 14px; padding: 12px; background: #f8fbfa; border-radius: 12px;">
+        <select name="period">
+            <option value="weekly" {% if period=='weekly' %}selected{% endif %}>Weekly View</option>
+            <option value="monthly" {% if period=='monthly' %}selected{% endif %}>Monthly View</option>
+        </select>
+        <input type="date" name="start_date" value="{{ start_date }}">
+        <input type="date" name="end_date" value="{{ end_date }}">
+        {% if not student_mode %}
+        <select name="section">
+            <option value="">All Sections</option>
+            {% for c in sections %}
+            <option value="{{ c }}" {% if section_name == c %}selected{% endif %}>Section {{ c }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}
+        <select name="subject">
+            <option value="">All Subjects</option>
+            {% for s in subjects %}
+            <option value="{{ s }}" {% if subject == s %}selected{% endif %}>{{ s }}</option>
+            {% endfor %}
+        </select>
+        <select name="sort">
+            <option value="attendance" {% if sort_by == 'attendance' %}selected{% endif %}>Sort by Attendance</option>
+            <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Sort by Name</option>
+            <option value="section" {% if sort_by == 'section' %}selected{% endif %}>Sort by Section</option>
+        </select>
+        <label style="display: flex; align-items: center; gap: 6px; font-weight: 600; cursor: pointer;">
+            <input type="checkbox" name="defaulters_only" value="1" {% if defaulters_only %}checked{% endif %} style="width: auto;">
+            <span class="text-danger">&#x26A0;&#xFE0F; Defaulters Only (&lt; 75%)</span>
+        </label>
+
+        <button class="btn btn-primary" type="submit">&#x1F50D; Apply Filter</button>
+    </form>
+</section>
+
+<!-- Smart KPI Metric Cards for Reports -->
+<div class="kpi-grid">
+    <div class="kpi-card card">
+        <div class="kpi-title">Students Evaluated</div>
+        <div class="kpi-value">{{ metrics['total_students'] }}</div>
+        <div class="kpi-sub">In selected filter</div>
+    </div>
+    <div class="kpi-card card">
+        <div class="kpi-title">Average Attendance Rate</div>
+        <div class="kpi-value {% if metrics['avg_percent'] >= 75 %}text-success{% else %}text-warning{% endif %}">
+            {{ metrics['avg_percent'] }}%
+        </div>
+        <div class="kpi-sub">{{ metrics['total_sessions'] }} Total student-sessions</div>
+    </div>
+    <div class="kpi-card card">
+        <div class="kpi-title">Total Present vs Absent</div>
+        <div class="kpi-value"><span class="text-success">{{ metrics['total_present'] }}</span> / <span class="text-danger">{{ metrics['total_absent'] }}</span></div>
+        <div class="kpi-sub">Across all subjects</div>
+    </div>
+    <div class="kpi-card card">
+        <div class="kpi-title">Defaulters / Shortage (&lt;75%)</div>
+        <div class="kpi-value {% if metrics['defaulters_count'] > 0 %}text-danger{% else %}text-success{% endif %}">
+            {{ metrics['defaulters_count'] }}
+        </div>
+        <div class="kpi-sub">Students needing attention</div>
+    </div>
+</div>
+
+<!-- Visual Analytics Charts -->
+<div class="charts-grid">
+    <div class="card chart-box">
+        <div class="row-between">
+            <h3 style="font-size: 0.95rem; color: #3b4e48;">&#x1F4CA; Subject-Wise Comparison</h3>
+            <span class="badge badge-info">Performance</span>
+        </div>
+        <div style="position: relative; height: 210px; margin-top: 6px;">
+            <canvas id="subjectBarChart"></canvas>
+        </div>
+    </div>
+    <div class="card chart-box">
+        <div class="row-between">
+            <h3 style="font-size: 0.95rem; color: #3b4e48;">&#x1F967; Attendance Distribution</h3>
+            <span class="badge badge-info">Ratio</span>
+        </div>
+        <div style="position: relative; height: 210px; margin-top: 6px;">
+            <canvas id="distPieChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Advanced Insights -->
+<section class="card">
+    <div class="row-between">
+        <h2>Advanced Insights</h2>
+    </div>
+    <div class="kpi-grid" style="margin-bottom: 16px;">
+        <div class="kpi-card card">
+            <div class="kpi-title">Forecast Outlook</div>
+            <div class="kpi-value {% if forecast_summary['next_rate'] >= 75 %}text-success{% else %}text-warning{% endif %}">{{ forecast_summary['next_rate'] }}%</div>
+            <div class="kpi-sub">Projected next 7-day attendance</div>
+        </div>
+        <div class="kpi-card card">
+            <div class="kpi-title">Trend Direction</div>
+            <div class="kpi-value{% if forecast_summary['direction'] == 'up' %} text-success{% elif forecast_summary['direction'] == 'down' %} text-danger{% endif %}">{{ forecast_summary['direction_label'] }}</div>
+            <div class="kpi-sub">Based on recent attendance velocity</div>
+        </div>
+    </div>
+    <div class="charts-grid">
+        <div class="card chart-box">
+            <h3>Top Absent Students</h3>
+            {% if top_absent %}
+            <ul>
+                {% for row in top_absent %}
+                <li>{{ row.name }} — {{ row.absent_sessions }} absences, {{ row.attendance_percent }}% rate</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="hint">No absence trend detected in the selected period.</p>
+            {% endif %}
+        </div>
+        <div class="card chart-box">
+            <h3>Consistent Present Students</h3>
+            {% if consistent_present %}
+            <ul>
+                {% for row in consistent_present %}
+                <li>{{ row.name }} — {{ row.present_sessions }} presents, {{ row.attendance_percent }}% rate</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="hint">No consistent attenders in the selected period.</p>
+            {% endif %}
+        </div>
+        <div class="card chart-box" style="grid-column: 1 / -1;">
+            <h3>Attendance Anomalies</h3>
+            {% if anomalies %}
+            <ul>
+                {% for row in anomalies %}
+                <li>{{ row.name }} — below 60% attendance in this range ({{ row.attendance_percent }}%)</li>
+                {% endfor %}
+            </ul>
+            {% else %}
+            <p class="hint">No attendance anomaly detected in the filtered period.</p>
+            {% endif %}
+        </div>
+    </div>
+</section>
+
+<!-- Detailed Data Table -->
+<section class="card">
+    <div class="row-between">
+        <h2>Detailed Student Breakdown {% if defaulters_only %}<span class="badge badge-danger">Showing Defaulters Only</span>{% endif %}</h2>
+        <span class="hint">{{ total_rows }} records found</span>
+    </div>
+    <table>
+        <thead>
+            <tr>
+                <th>Student Code</th>
+                <th>Name</th>
+                <th>Section</th>
+                <th>Classes Held</th>
+                <th>Present</th>
+                <th>Absent</th>
+                <th>Attendance Rate</th>
+                <th>Status</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for r in rows %}
+            <tr {% if r['is_defaulter'] %}style="background: #fff8f8;"{% endif %}>
+                <td><strong>{{ r.student_code }}</strong></td>
+                <td>{{ r.name }}</td>
+                <td>{{ r.section_name }}</td>
+                <td>{{ r.no_of_classes }}</td>
+                <td class="text-success"><strong>{{ r.present_sessions }}</strong></td>
+                <td class="text-danger"><strong>{{ r.absent_sessions }}</strong></td>
+                <td>
+                    <strong>{{ r.attendance_percent }}%</strong>
+                </td>
+                <td>
+                    {% if r.no_of_classes == 0 %}
+                    <span class="badge badge-info">No Data</span>
+                    {% elif r.is_defaulter %}
+                    <span class="badge badge-danger">&#x26A0;&#xFE0F; Shortage (&lt; 75%)</span>
+                    {% else %}
+                    <span class="badge badge-success">&#x2705; Safe (&ge; 75%)</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr>
+                <td colspan="8" style="text-align:center; padding: 24px;" class="hint">No attendance records match the selected filter.</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% if total_pages > 1 %}
+    <div class="pagination-row">
+        {% if page > 1 %}
+        <a class="btn btn-sm" href="{{ url_for('reports.reports_home', period=period, section=section_name, subject=subject, defaulters_only=1 if defaulters_only else 0, sort=sort_by, start_date=start_date, end_date=end_date, page=page-1, per_page=per_page) }}">Previous</a>
+        {% endif %}
+        <span class="hint">Page {{ page }} of {{ total_pages }}</span>
+        {% if page < total_pages %}
+        <a class="btn btn-sm" href="{{ url_for('reports.reports_home', period=period, section=section_name, subject=subject, defaulters_only=1 if defaulters_only else 0, sort=sort_by, start_date=start_date, end_date=end_date, page=page+1, per_page=per_page) }}">Next</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</section>
+{% endblock %}
+
+{% block scripts %}
+<script>
+document.addEventListener("DOMContentLoaded", () => {
+    // 1. Subject Bar Chart (Lighter aesthetic colors & compact bars)
+    const subCtx = document.getElementById("subjectBarChart");
+    if (subCtx) {
+        const subData = {{ subject_chart_data | tojson }};
+        if (subData.labels && subData.labels.length > 0) {
+            new Chart(subCtx, {
+                type: 'bar',
+                data: {
+                    labels: subData.labels,
+                    datasets: [
+                        {
+                            label: 'Present',
+                            data: subData.present,
+                            backgroundColor: 'rgba(56, 161, 105, 0.68)',
+                            borderColor: 'rgba(56, 161, 105, 0.95)',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            maxBarThickness: 24
+                        },
+                        {
+                            label: 'Absent',
+                            data: subData.absent,
+                            backgroundColor: 'rgba(239, 106, 115, 0.65)',
+                            borderColor: 'rgba(239, 106, 115, 0.95)',
+                            borderWidth: 1,
+                            borderRadius: 4,
+                            maxBarThickness: 24
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'top', labels: { boxWidth: 10, font: { size: 11 } } }
+                    },
+                    scales: {
+                        x: { grid: { display: false } },
+                        y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f0f3f2' } }
+                    }
+                }
+            });
+        } else {
+            subCtx.parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#7a8b86;font-size:0.9rem;">No subject data in this date range</div>';
+        }
+    }
+
+    // 2. Attendance Distribution Doughnut Chart (Soft pastel colors)
+    const distCtx = document.getElementById("distPieChart");
+    if (distCtx) {
+        const presCount = {{ metrics['total_present'] }};
+        const abseCount = {{ metrics['total_absent'] }};
+
+        if (presCount > 0 || abseCount > 0) {
+            new Chart(distCtx, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Present Sessions', 'Absent Sessions'],
+                    datasets: [{
+                        data: [presCount, abseCount],
+                        backgroundColor: ['rgba(56, 161, 105, 0.72)', 'rgba(239, 106, 115, 0.7)'],
+                        borderColor: ['#fff', '#fff'],
+                        borderWidth: 2,
+                        hoverOffset: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { boxWidth: 10, font: { size: 11 } } }
+                    },
+                    cutout: '72%'
+                }
+            });
+        } else {
+            distCtx.parentElement.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:#7a8b86;font-size:0.9rem;">No marked sessions in this date range</div>';
+        }
+    }
+});
+</script>
+{% endblock %}

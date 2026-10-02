@@ -1,0 +1,50 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+    <div class="row-between">
+        <div>
+            <h1>Attendance Alerts</h1>
+            <p class="hint">Send reminder alerts for students below the configured threshold.</p>
+        </div>
+    </div>
+
+    <form method="post" class="inline-form filter-form" style="margin-top: 14px;">
+        <select name="channel">
+            {% for option in channel_options %}
+            <option value="{{ option }}" {% if option == 'email' %}selected{% endif %}>{{ option|upper }}</option>
+            {% endfor %}
+        </select>
+        <label>Threshold</label>
+        <input type="number" name="threshold" min="50" max="100" value="{{ threshold }}">
+        <button class="btn btn-primary" type="submit">Send Alerts</button>
+    </form>
+</section>
+
+<div class="charts-grid">
+    <section class="card chart-box">
+        <h3>At-Risk Students</h3>
+        {% if defaulters %}
+        <ul>
+            {% for item in defaulters %}
+            <li><strong>{{ item['name'] }}</strong> ({{ item['student_code'] }}) — {{ item['section_name'] }} — {{ item['present_sessions'] }}/{{ item['total_sessions'] }} present</li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="hint">No at-risk students detected.</p>
+        {% endif %}
+    </section>
+
+    <section class="card chart-box">
+        <h3>Recent Notifications</h3>
+        {% if notifications %}
+        <ul>
+            {% for alert in notifications %}
+            <li><strong>{{ alert['channel']|upper }}</strong> • {{ alert['subject'] }} • {{ alert['message'] }} • {{ alert['created_at'] }}</li>
+            {% endfor %}
+        </ul>
+        {% else %}
+        <p class="hint">No alerts queued or sent yet.</p>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

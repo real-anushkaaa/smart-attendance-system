@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+    <div class="row-between">
+        <div>
+            <h1>Student Portal</h1>
+            <p class="hint">{{ student['name'] }} • {{ student['student_code'] }} • Section {{ student['section_name'] }} {{ student['section'] or '' }}</p>
+        </div>
+        <a class="btn" href="{{ url_for('attendance.mark_page') }}">Mark Attendance</a>
+    </div>
+</section>
+
+<div class="kpi-grid">
+    <div class="kpi-card card">
+        <div class="kpi-title">Overall Attendance</div>
+        <div class="kpi-value {% if student_analytics['overall_percent'] >= 75 %}text-success{% else %}text-warning{% endif %}">{{ student_analytics['overall_percent'] }}%</div>
+        <div class="kpi-sub">{{ student_analytics['present_classes'] }} present of {{ student_analytics['total_classes'] }} classes</div>
+    </div>
+    <div class="kpi-card card">
+        <div class="kpi-title">Classes Attended</div>
+        <div class="kpi-value text-success">{{ student_analytics['present_classes'] }}</div>
+        <div class="kpi-sub">Current record</div>
+    </div>
+    <div class="kpi-card card">
+        <div class="kpi-title">Classes Missed</div>
+        <div class="kpi-value text-danger">{{ student_analytics['absent_classes'] }}</div>
+        <div class="kpi-sub">Missing attendance</div>
+    </div>
+    <div class="kpi-card card">
+        <div class="kpi-title">Status</div>
+        <div class="kpi-value {% if student_analytics['is_defaulter'] %}text-danger{% else %}text-success{% endif %}">{% if student_analytics['is_defaulter'] %}At Risk{% else %}Healthy{% endif %}</div>
+        <div class="kpi-sub">Threshold: 75%</div>
+    </div>
+</div>
+
+<div class="charts-grid">
+    <section class="card chart-box">
+        <h3>Subject Breakdown</h3>
+        {% if student_analytics['subject_breakdown'] %}
+        {% for sb in student_analytics['subject_breakdown'] %}
+        <div style="margin-bottom: 12px;">
+            <div class="row-between">
+                <strong>{{ sb['subject'] }}</strong>
+                <span>{{ sb['percent'] }}%</span>
+            </div>
+            <div class="progress-bar-bg">
+                <div class="progress-bar-fill {% if sb['is_defaulter'] %}fill-danger{% else %}fill-success{% endif %}" style="width: {{ sb['percent'] }}%;"></div>
+            </div>
+        </div>
+        {% endfor %}
+        {% else %}
+        <p class="hint">No attendance data yet for this student.</p>
+        {% endif %}
+    </section>
+
+    <section class="card chart-box">
+        <h3>Recent Attendance</h3>
+        <table>
+            <tr><th>Date</th><th>Subject</th><th>Status</th></tr>
+            {% for item in recent_attendance %}
+            <tr>
+                <td>{{ item['date'] }}</td>
+                <td>{{ item['subject'] }}</td>
+                <td>
+                    {% if item['status'] == 'present' %}<span class="badge badge-success">Present</span>
+                    {% elif item['status'] == 'late' %}<span class="badge badge-warning">Late</span>
+                    {% else %}<span class="badge badge-danger">Absent</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% else %}
+            <tr><td colspan="3" class="hint">No recent attendance records.</td></tr>
+            {% endfor %}
+        </table>
+    </section>
+</div>
+
+<section class="card">
+    <h3>Notifications</h3>
+    {% if alerts %}
+    <ul>
+        {% for alert in alerts %}
+        <li><strong>{{ alert['channel']|upper }}</strong> • {{ alert['subject'] }} • {{ alert['message'] }}</li>
+        {% endfor %}
+    </ul>
+    {% else %}
+    <p class="hint">No attendance notifications yet.</p>
+    {% endif %}
+</section>
+{% endblock %}

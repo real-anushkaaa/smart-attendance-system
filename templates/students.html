@@ -1,0 +1,95 @@
+﻿{% extends 'base.html' %}
+{% block content %}
+<section class="card">
+    <div class="row-between">
+        <h1 data-i18n="students">Students</h1>
+        {% if session.get('role') == 'admin' %}
+        <div class="row-gap">
+            <a href="{{ url_for('students.add_student') }}" class="btn btn-primary" data-i18n="add_students">Add Students</a>
+            <a href="{{ url_for('students.import_students_page') }}" class="btn">Import CSV</a>
+            <a href="{{ url_for('students.export_students_csv') }}" class="btn">Export CSV</a>
+        </div>
+        {% endif %}
+    </div>
+
+    <form method="get" class="row-gap filter-form" style="margin: 16px 0; align-items:end; flex-wrap:wrap;">
+        <div class="inline-form">
+            <label for="student-search">Search</label>
+            <input id="student-search" name="q" value="{{ search_query or '' }}" placeholder="Name, roll no, phone, UID">
+        </div>
+        <div class="inline-form">
+            <label for="section-filter">Section</label>
+            <select id="section-filter" name="section">
+                <option value="">All Sections</option>
+                {% for section in sections %}
+                <option value="{{ section }}" {% if section_filter == section %}selected{% endif %}>{{ section }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="inline-form">
+            <label for="sort-filter">Sort</label>
+            <select id="sort-filter" name="sort">
+                <option value="name" {% if sort_by == 'name' %}selected{% endif %}>Name</option>
+                <option value="code" {% if sort_by == 'code' %}selected{% endif %}>Roll No.</option>
+                <option value="section" {% if sort_by == 'section' %}selected{% endif %}>Section</option>
+                <option value="updated" {% if sort_by == 'updated' %}selected{% endif %}>Recently Updated</option>
+            </select>
+        </div>
+        <div class="inline-form">
+            <label for="per-page">Per page</label>
+            <select id="per-page" name="per_page">
+                <option value="10" {% if per_page == 10 %}selected{% endif %}>10</option>
+                <option value="20" {% if per_page == 20 %}selected{% endif %}>20</option>
+                <option value="50" {% if per_page == 50 %}selected{% endif %}>50</option>
+            </select>
+        </div>
+        <button class="btn btn-primary" type="submit">Filter</button>
+        {% if search_query or section_filter or sort_by != 'name' or per_page != 10 %}
+        <a href="{{ url_for('students.list_students') }}" class="btn">Reset</a>
+        {% endif %}
+    </form>
+
+    <div class="table-meta">
+        <span>{{ total_rows }} total records</span>
+        <span>Page {{ page }} of {{ total_pages }}</span>
+    </div>
+
+    <table>
+        <tr>
+            <th>Roll No.</th><th>Name</th><th>Section</th><th>Unique ID</th><th>Phone</th>
+            {% if session.get('role') == 'admin' %}
+            <th>Actions</th>
+            {% endif %}
+        </tr>
+        {% for s in students %}
+        <tr>
+            <td>{{ s['student_code'] }}</td>
+            <td>{{ s['name'] }}</td>
+            <td>{{ s['section_name'] }} {{ s['section'] or '' }}</td>
+            <td>{{ s['unique_id'] or '-' }}</td>
+            <td>{{ s['guardian_phone'] or '-' }}</td>
+            {% if session.get('role') == 'admin' %}
+            <td>
+                <a class="btn btn-sm" href="{{ url_for('students.edit_student', student_id=s['id']) }}">Edit</a>
+                <form method="post" action="{{ url_for('students.delete_student', student_id=s['id']) }}" style="display:inline">
+                    <button class="btn btn-sm danger" onclick="return confirm('Delete this student?')">Delete</button>
+                </form>
+            </td>
+            {% endif %}
+        </tr>
+        {% endfor %}
+    </table>
+    {% if total_pages > 1 %}
+    <div class="pagination-row">
+        {% if page > 1 %}
+        <a class="btn btn-sm" href="{{ url_for('students.list_students', q=search_query, section=section_filter, sort=sort_by, per_page=per_page, page=page-1) }}">Previous</a>
+        {% endif %}
+        <span class="hint">Page {{ page }} of {{ total_pages }}</span>
+        {% if page < total_pages %}
+        <a class="btn btn-sm" href="{{ url_for('students.list_students', q=search_query, section=section_filter, sort=sort_by, per_page=per_page, page=page+1) }}">Next</a>
+        {% endif %}
+    </div>
+    {% endif %}
+</section>
+{% endblock %}
+

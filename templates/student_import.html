@@ -1,0 +1,12 @@
+{% extends 'base.html' %}
+{% block content %}
+<section class="card auth-card">
+    <h1>Import Students from CSV</h1>
+    <p class="hint">Required columns: student_code, name, section_name. Optional: section, unique_id, guardian_phone, login_username, login_password.</p>
+    <form method="post" action="{{ url_for('students.import_students_csv') }}" enctype="multipart/form-data" class="grid-form">
+        <input type="file" name="file" accept=".csv" required>
+        <button class="btn btn-primary" type="submit">Import Students</button>
+        <a class="btn" href="{{ url_for('students.list_students') }}">Back to Students</a>
+    </form>
+</section>
+{% endblock %}
